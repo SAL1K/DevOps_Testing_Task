@@ -1,0 +1,85 @@
+pipeline {
+    agent {
+        label 'test'
+    }
+
+    environment {
+        HADOOP_CONTAINER = "336-namenode-1"
+    }
+
+    stages {
+        stage('Resource manager') {
+            steps {
+                script {
+                    echo "8088 Cluster Metrics"
+                    sh 'nc -zv 127.19.0.4 8088'
+                }
+            }
+        }
+
+        stage('metrics DataNode') {
+            steps {
+                script {
+                    echo "проверка метрик DataNode"
+                    sh """
+                        curl -s http://172.19.0.2:9870/jmx | jq .
+                    """
+                }
+            }
+        }
+
+        stage('SecondaryNameNode (HDFS)') {
+            steps {
+                script {
+                    echo "SecondaryNameNode (HDFS)"
+                    sh """
+                        ps aux | grep SecondaryNameNode
+                    """
+                }
+            }
+        }
+
+        stage('Deploy Nginx in Container with Ansible') {
+            when {
+                expression {
+                    currentBuild.result == null || currentBuild.result == 'SUCCESS'
+                }
+            }
+            steps {
+                script {
+                    echo "Установка Nginx в контейнер с использованием Ansible..."
+                    ansiblePlaybook(
+                        playbook: 'deploy_nginx_in_container.yml',
+                        inventory: 'inventory.ini',
+                        credentialsId: ''
+                    )
+                }
+            }
+        }
+
+        stage('Verify Nginx in Container') {
+            when {
+                expression {
+                    currentBuild.result == null || currentBuild.result == 'SUCCESS'
+                }
+            }
+            steps {
+                script {
+                    echo "Проверка работоспособности Nginx в контейнере..."
+                    sh """
+                        docker exec ${HADOOP_CONTAINER} curl -s http://localhost | grep "Welcome to nginx"
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo "Один из сервисов Hadoop недоступен. Установка Nginx пропущена."
+        }
+        success {
+            echo "Все сервисы Hadoop работают. Nginx успешно установлен и проверен."
+        }
+    }
+}
