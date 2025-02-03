@@ -1,0 +1,22 @@
+---
+- hosts: localhost
+  tasks:
+    - name: Run Nginx container
+      shell: |
+        docker run -d --name nginx_container -p 81:80 nginx:latest
+      args:
+        executable: /bin/bash
+      register: nginx_container_run
+      changed_when: "'nginx_container' in nginx_container_run.stdout"
+
+    - name: Verify Nginx is running on localhost
+      shell: |
+        curl -s http://localhost:81 | grep "Welcome to nginx"
+      args:
+        executable: /bin/bash
+      register: nginx_verify
+      changed_when: "'Welcome to nginx' in nginx_verify.stdout"
+
+    - name: Print verification result
+      debug:
+        msg: "{{ nginx_verify.stdout }}"

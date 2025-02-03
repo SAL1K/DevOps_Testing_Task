@@ -3,16 +3,16 @@ pipeline {
         label 'test'
     }
 
-    environment {
-        HADOOP_CONTAINER = "336-namenode-1"
-    }
-
     stages {
         stage('Resource manager') {
             steps {
                 script {
-                    echo "8088 Cluster Metrics"
-                    sh 'nc -zv 127.19.0.4 8088'
+                    echo "Проверка доступности Resource Manager (8088 Cluster Metrics)"
+                    try {
+                        sh 'nc -zv 127.19.0.4 8088'
+                    } catch (Exception e) {
+                        error("Resource Manager недоступен.")
+                    }
                 }
             }
         }
@@ -20,10 +20,14 @@ pipeline {
         stage('metrics DataNode') {
             steps {
                 script {
-                    echo "проверка метрик DataNode"
-                    sh """
-                        curl -s http://172.19.0.2:9870/jmx | jq .
-                    """
+                    echo "Проверка доступности DataNode (9870 JMX Metrics)"
+                    try {
+                        sh """
+                            curl -s http://172.19.0.2:9870/jmx | jq .
+                        """
+                    } catch (Exception e) {
+                        error("DataNode недоступен.")
+                    }
                 }
             }
         }
@@ -31,10 +35,14 @@ pipeline {
         stage('SecondaryNameNode (HDFS)') {
             steps {
                 script {
-                    echo "SecondaryNameNode (HDFS)"
-                    sh """
-                        ps aux | grep SecondaryNameNode
-                    """
+                    echo "Проверка доступности SecondaryNameNode (HDFS)"
+                    try {
+                        sh """
+                            ps aux | grep SecondaryNameNode
+                        """
+                    } catch (Exception e) {
+                        error("SecondaryNameNode недоступен.")
+                    }
                 }
             }
         }
@@ -51,7 +59,6 @@ pipeline {
                     ansiblePlaybook(
                         playbook: 'deploy_nginx_in_container.yml',
                         inventory: 'inventory.ini',
-                        credentialsId: ''
                     )
                 }
             }
@@ -67,7 +74,7 @@ pipeline {
                 script {
                     echo "Проверка работоспособности Nginx в контейнере..."
                     sh """
-                        docker exec ${HADOOP_CONTAINER} curl -s http://localhost | grep "Welcome to nginx"
+                        curl -s http://localhost:81 | grep "Welcome to nginx"
                     """
                 }
             }
